@@ -91,7 +91,7 @@ class Pdf2zhTranslateExtension extends PLExtension {
           name: "pdf2zh Binary Path",
           description:
             "Absolute path to the pdf2zh executable (e.g. /home/user/.local/bin/pdf2zh). Leave empty to use system PATH.",
-          value: "/home/starandhonor/.local/bin/pdf2zh",
+          value: "",
           order: 5,
         },
       },

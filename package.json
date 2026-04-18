@@ -1,13 +1,21 @@
 {
   "name": "paperlib-pdf2zh-translate-extension",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "dist/main.js",
   "type": "commonjs",
   "manifest_version": "1.0.0",
-  "description": "Translate PDFs using pdf2zh (PDFMathTranslate) HTTP API directly in Paperlib.",
+  "description": "Translate PDFs using pdf2zh (PDFMathTranslate) directly in Paperlib.",
   "author": "starAndHonor",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/starAndHonor/paperlib-pdf2zh-translate-extension.git"
+  },
   "keywords": [
-    "paperlib"
+    "paperlib",
+    "pdf2zh",
+    "pdf-translation",
+    "academic"
   ],
   "scripts": {
     "prebuild": "tsc --noEmit",
