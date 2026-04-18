@@ -10,6 +10,9 @@ export interface TranslationConfig {
   outputMode: "both" | "mono" | "dual";
   storageMode: DefaultOpenMode;
   timeoutMinutes: number;
+  apiBaseUrl: string;
+  apiKey: string;
+  modelName: string;
 }
 
 export class TranslationManager {
@@ -144,6 +147,9 @@ export class TranslationManager {
         service: config.translateService,
         noMono,
         noDual,
+        apiBaseUrl: config.apiBaseUrl,
+        apiKey: config.apiKey,
+        modelName: config.modelName,
       };
 
       // Create temp output directory

@@ -10,6 +10,9 @@ export interface TranslateOptions {
   service: string;
   noMono: boolean;
   noDual: boolean;
+  apiBaseUrl: string;
+  apiKey: string;
+  modelName: string;
 }
 
 export interface TranslateResult {
@@ -209,10 +212,70 @@ export class Pdf2zhClient {
       args.push("--no-dual");
     }
 
+    // Service-specific: model, base URL, API key
+    const serviceFlags = this.getServiceConfigFlags(options.service);
+    if (options.modelName && serviceFlags.model) {
+      args.push(serviceFlags.model, options.modelName);
+    }
+    if (options.apiBaseUrl && serviceFlags.baseUrl) {
+      args.push(serviceFlags.baseUrl, options.apiBaseUrl);
+    }
+    if (options.apiKey && serviceFlags.apiKey) {
+      args.push(serviceFlags.apiKey, options.apiKey);
+    }
+
     // Input file (must be last)
     args.push(filePath);
 
     return args;
+  }
+
+  /**
+   * Get the CLI flag names for model/baseUrl/apiKey per service.
+   */
+  private getServiceConfigFlags(service: string): {
+    model: string | null;
+    baseUrl: string | null;
+    apiKey: string | null;
+  } {
+    const flagMap: Record<string, { model: string | null; baseUrl: string | null; apiKey: string | null }> = {
+      openai: {
+        model: "--openai-model",
+        baseUrl: "--openai-base-url",
+        apiKey: "--openai-api-key",
+      },
+      deepseek: {
+        model: "--deepseek-model",
+        baseUrl: null,
+        apiKey: "--deepseek-api-key",
+      },
+      ollama: {
+        model: "--ollama-model",
+        baseUrl: "--ollama-host",
+        apiKey: null,
+      },
+      siliconflow: {
+        model: "--siliconflow-model",
+        baseUrl: "--siliconflow-base-url",
+        apiKey: "--siliconflow-api-key",
+      },
+      openaicompatible: {
+        model: "--openai-compatible-model",
+        baseUrl: "--openai-compatible-base-url",
+        apiKey: "--openai-compatible-api-key",
+      },
+      deepl: {
+        model: null,
+        baseUrl: null,
+        apiKey: "--deepl-auth-key",
+      },
+      aliyundashscope: {
+        model: "--aliyun-dashscope-model",
+        baseUrl: "--aliyun-dashscope-base-url",
+        apiKey: "--aliyun-dashscope-api-key",
+      },
+    };
+    return flagMap[service] || { model: null, baseUrl: null, apiKey: null };
   }
 
   private getServiceFlag(service: string): string | null {
@@ -226,6 +289,7 @@ export class Pdf2zhClient {
       deepseek: "--deepseek",
       siliconflow: "--siliconflow",
       openaicompatible: "--openaicompatible",
+      aliyundashscope: "--aliyundashscope",
     };
     return flagMap[service] ?? null;
   }

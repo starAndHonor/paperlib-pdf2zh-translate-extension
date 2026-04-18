@@ -50,6 +50,7 @@ class Pdf2zhTranslateExtension extends PLExtension {
             deepseek: "DeepSeek",
             siliconflow: "SiliconFlow",
             openaicompatible: "OpenAI Compatible",
+            aliyundashscope: "Aliyun DashScope",
           },
           order: 1,
         },
@@ -93,6 +94,30 @@ class Pdf2zhTranslateExtension extends PLExtension {
             "Absolute path to the pdf2zh executable (e.g. /home/user/.local/bin/pdf2zh). Leave empty to use system PATH.",
           value: "",
           order: 5,
+        },
+        apiBaseUrl: {
+          type: "string",
+          name: "API Base URL",
+          description:
+            "Base URL for the translation API (e.g. https://api.openai.com/v1). Leave empty for default.",
+          value: "",
+          order: 6,
+        },
+        apiKey: {
+          type: "string",
+          name: "API Key",
+          description:
+            "API key for the translation service. Leave empty for services that don't require one (e.g. Google, Bing).",
+          value: "",
+          order: 7,
+        },
+        modelName: {
+          type: "string",
+          name: "Model Name",
+          description:
+            "Model name for LLM-based services (e.g. gpt-4o, deepseek-chat). Leave empty for default.",
+          value: "",
+          order: 8,
         },
       },
     });
@@ -228,6 +253,9 @@ class Pdf2zhTranslateExtension extends PLExtension {
         (await getPref("timeoutMinutes")) || "30",
         10
       ),
+      apiBaseUrl: (await getPref("apiBaseUrl")) || "",
+      apiKey: (await getPref("apiKey")) || "",
+      modelName: (await getPref("modelName")) || "",
     };
   }
 }
