@@ -1,7 +1,13 @@
 import { PLAPI, PLMainAPI } from "paperlib-api/api";
 import { TranslationManager } from "./translation-manager";
 
-type SlotState = "idle" | "starting" | "progress" | "attaching" | "complete" | "error";
+type SlotState =
+  | "idle"
+  | "starting"
+  | "progress"
+  | "attaching"
+  | "complete"
+  | "error";
 
 interface ProgressData {
   percent: number;
@@ -14,6 +20,9 @@ const SLOT_KEY = "pdf2zh-translate";
 export class UIManager {
   private translationManager: TranslationManager;
   private currentEntityId: string | null = null;
+
+  /** Cache last known progress per entity so reopening the panel restores it */
+  private progressCache: Map<string, ProgressData> = new Map();
 
   constructor(translationManager: TranslationManager) {
     this.translationManager = translationManager;
@@ -32,7 +41,8 @@ export class UIManager {
     }
 
     if (this.translationManager.isTranslating(entityId)) {
-      this.updateSlotForEntity(entityId, "progress", { percent: 0, stage: "" });
+      const cached = this.progressCache.get(entityId) || { percent: 0, stage: "" };
+      this.updateSlotForEntity(entityId, "progress", cached);
     } else if (this.translationManager.isCompleted(entityId)) {
       this.updateSlotForEntity(entityId, "complete");
     } else {
@@ -47,14 +57,22 @@ export class UIManager {
   updateSlotForEntity(
     entityId: string,
     state: SlotState,
-    data?: ProgressData
+    data?: ProgressData,
+    langOut?: string
   ): void {
     // Only update slot if this entity is currently selected
     if (this.currentEntityId !== entityId) {
       return;
     }
 
-    const content = this.generateSlotHTML(state, data);
+    // Cache progress data for panel reopen
+    if (state === "progress" && data) {
+      this.progressCache.set(entityId, data);
+    } else if (state === "complete" || state === "error") {
+      this.progressCache.delete(entityId);
+    }
+
+    const content = this.generateSlotHTML(state, data, langOut);
 
     PLAPI.uiSlotService.updateSlot(SLOT_ID, {
       [SLOT_KEY]: {
@@ -76,7 +94,11 @@ export class UIManager {
   /**
    * Generate HTML content for the slot based on translation state.
    */
-  private generateSlotHTML(state: SlotState, data?: ProgressData): string {
+  private generateSlotHTML(
+    state: SlotState,
+    data?: ProgressData,
+    langOut?: string
+  ): string {
     const baseStyle = "font-size:11px;";
 
     switch (state) {
@@ -99,7 +121,7 @@ export class UIManager {
         const stage = data?.stage ?? "";
         return `<div style="display:flex;align-items:center;gap:8px;">
           <span style="${baseStyle}color:#3b82f6;">
-            \u23F3 Translating... ${percent}%${stage ? ` · ${stage}` : ""}
+            \u23F3 Translating... ${percent}%${stage ? ` \u00B7 ${stage}` : ""}
           </span>
           <div style="flex:1;max-width:100px;height:3px;background:#e5e7eb;border-radius:2px;">
             <div style="height:100%;width:${percent}%;background:#3b82f6;border-radius:2px;"></div>
@@ -114,12 +136,14 @@ export class UIManager {
           </span>
         </div>`;
 
-      case "complete":
+      case "complete": {
+        const lang = langOut ? ` to ${langOut.toUpperCase()}` : "";
         return `<div style="display:flex;align-items:center;gap:6px;">
           <span style="${baseStyle}color:#22c55e;">
-            \u2705 Translation saved as supplementaries
+            \u2705 Translation${lang} saved as supplementaries
           </span>
         </div>`;
+      }
 
       case "error":
         return `<div style="display:flex;align-items:center;gap:6px;">
@@ -137,8 +161,6 @@ export class UIManager {
    * Register the extension command.
    */
   registerCommand(extensionId: string): () => void {
-    const disposers: (() => void)[] = [];
-
     PLAPI.commandService.registerExternel({
       id: "pdf2zh_translate",
       description: "Translate PDF with pdf2zh",
@@ -146,7 +168,9 @@ export class UIManager {
     });
 
     const onCommand = async () => {
-      const selected = (await PLAPI.uiStateService.getState("selectedPaperEntities")) as any[];
+      const selected = (await PLAPI.uiStateService.getState(
+        "selectedPaperEntities"
+      )) as any[];
       if (!selected || selected.length === 0) {
         PLAPI.logService.warn(
           "No paper selected",
@@ -171,17 +195,8 @@ export class UIManager {
 
     PLAPI.commandService.on("pdf2zh_translate" as any, onCommand);
 
-    disposers.push(() => {
-      try {
-        // Commands are not explicitly unregistered in Paperlib's API
-        // but we clean up the event listener
-      } catch {
-        // Ignore
-      }
-    });
-
     return () => {
-      for (const d of disposers) d();
+      // Commands are not explicitly unregistered in Paperlib's API
     };
   }
 
@@ -223,7 +238,8 @@ export class UIManager {
       (newValue: any) => {
         const entities = newValue.value || newValue;
         if (entities && entities.length === 1) {
-          this.onSelectionChanged(String(entities[0]._id));
+          const entity = entities[0];
+          this.onSelectionChanged(String(entity._id));
         } else {
           this.onSelectionChanged(null);
         }

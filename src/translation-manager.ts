@@ -36,6 +36,11 @@ export class TranslationManager {
     this.uiManager = uiManager;
   }
 
+  /** Expose fileManager for UI to detect existing translations. */
+  getFileManager(): FileManager {
+    return this.fileManager;
+  }
+
   /**
    * Check if a translation is in progress for the given entity.
    */
@@ -69,7 +74,6 @@ export class TranslationManager {
     }
 
     // Reload full entity — uiStateService returns a lightweight preview
-    // without supplementaries/defaultSup fields
     const fullEntities = await PLAPI.paperService.load(
       `_id == oid(${entityId})`,
       "addTime",
@@ -85,18 +89,6 @@ export class TranslationManager {
       return;
     }
     const fullEntity = fullEntities[0] as any;
-
-    PLAPI.logService.info(
-      "[pdf2zh] fullEntity loaded",
-      `title=${fullEntity.title}, ` +
-      `defaultSup=${JSON.stringify(fullEntity.defaultSup)}, ` +
-      `hasSup=${!!fullEntity.supplementaries}, ` +
-      `supType=${typeof fullEntity.supplementaries}, ` +
-      `supKeys=${fullEntity.supplementaries ? Object.keys(fullEntity.supplementaries).join(",") : "none"}, ` +
-      `ownKeys=${Object.keys(fullEntity).join(",")}`,
-      true,
-      "pdf2zh"
-    );
 
     // Validate entity has a PDF
     const pdfPath = await this.fileManager.resolvePaperPDF(fullEntity);
@@ -129,10 +121,12 @@ export class TranslationManager {
     // Update UI to show "starting" state
     this.uiManager.updateSlotForEntity(entityId, "starting");
 
+    let outputDir: string | undefined;
+
     try {
       PLAPI.logService.info(
         "Starting translation...",
-        entity.title,
+        `${fullEntity.title} → ${config.langOut}`,
         true,
         "pdf2zh"
       );
@@ -153,17 +147,23 @@ export class TranslationManager {
       };
 
       // Create temp output directory
-      const outputDir = this.client.createTempDir();
+      outputDir = this.client.createTempDir();
 
       // Update UI to show "running" state
-      this.uiManager.updateSlotForEntity(entityId, "progress", { percent: 0, stage: "" });
+      this.uiManager.updateSlotForEntity(entityId, "progress", {
+        percent: 0,
+        stage: "",
+      });
 
       // Progress callback: update slot and notification bar
       const onProgress = (percent: number, stage: string) => {
-        this.uiManager.updateSlotForEntity(entityId, "progress", { percent, stage });
+        this.uiManager.updateSlotForEntity(entityId, "progress", {
+          percent,
+          stage,
+        });
 
         PLAPI.logService.progress(
-          `Translating: ${entity.title || "Untitled"}`,
+          `Translating: ${fullEntity.title || "Untitled"}`,
           percent,
           true,
           "pdf2zh",
@@ -180,10 +180,13 @@ export class TranslationManager {
         onProgress
       );
 
-      // Log stdout/stderr for debugging
+      // Force 100% — pdf2zh may not reach 100% before the finish event
+      onProgress(100, "Done");
+
+      // Log stderr for debugging (truncated)
       if (result.stderr) {
         PLAPI.logService.info(
-          "pdf2zh stderr",
+          "[pdf2zh] stderr",
           result.stderr.substring(0, 500),
           false,
           "pdf2zh"
@@ -197,7 +200,7 @@ export class TranslationManager {
 
       PLAPI.logService.info(
         "Translation complete, attaching files...",
-        entity.title,
+        fullEntity.title,
         true,
         "pdf2zh"
       );
@@ -226,18 +229,18 @@ export class TranslationManager {
         config.storageMode
       );
 
-      // Cleanup temp output directory
-      this.client.cleanupDir(outputDir);
+      // Persist changes
+      await PLAPI.paperService.update([freshEntity], true, true);
 
       // Mark as completed
       this.activeEntityIds.delete(entityId);
       this.completedEntityIds.add(entityId);
 
-      this.uiManager.updateSlotForEntity(entityId, "complete");
+      this.uiManager.updateSlotForEntity(entityId, "complete", undefined, config.langOut);
 
       PLAPI.logService.info(
         "Translation saved",
-        `Translated PDFs added to "${entity.title || "Untitled"}"`,
+        `Translated PDFs added to "${fullEntity.title || "Untitled"}"`,
         true,
         "pdf2zh"
       );
@@ -248,10 +251,15 @@ export class TranslationManager {
 
       PLAPI.logService.error(
         "Translation failed",
-        `${String(e)} — ${entity.title || "Untitled"}`,
+        `${String(e)} — ${fullEntity.title || "Untitled"}`,
         true,
         "pdf2zh"
       );
+    } finally {
+      // Always cleanup temp output directory
+      if (outputDir) {
+        this.client.cleanupDir(outputDir);
+      }
     }
   }
 
