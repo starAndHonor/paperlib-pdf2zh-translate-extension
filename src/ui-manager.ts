@@ -32,12 +32,22 @@ export class UIManager {
    * Called when the selected paper changes.
    * Updates the slot to reflect the current paper's translation state.
    */
-  onSelectionChanged(entityId: string | null): void {
+  onSelectionChanged(entityId: string | null, entity?: any): void {
     this.currentEntityId = entityId;
 
     if (!entityId) {
       this.clearSlot();
       return;
+    }
+
+    // If entity has no supplementary files, clear stale completed status
+    if (this.translationManager.isCompleted(entityId) && entity) {
+      const hasSups = (entity.supURLs?.length > 0) ||
+        (entity.supplementaries && typeof entity.supplementaries === "object" &&
+          Object.keys(entity.supplementaries).length > 0);
+      if (!hasSups) {
+        this.translationManager.clearCompleted(entityId);
+      }
     }
 
     if (this.translationManager.isTranslating(entityId)) {
@@ -239,7 +249,7 @@ export class UIManager {
         const entities = newValue.value || newValue;
         if (entities && entities.length === 1) {
           const entity = entities[0];
-          this.onSelectionChanged(String(entity._id));
+          this.onSelectionChanged(String(entity._id), entity);
         } else {
           this.onSelectionChanged(null);
         }

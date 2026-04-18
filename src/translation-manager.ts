@@ -56,6 +56,14 @@ export class TranslationManager {
   }
 
   /**
+   * Clear completed status for an entity.
+   * Called when the user deletes supplementary files.
+   */
+  clearCompleted(entityId: string): void {
+    this.completedEntityIds.delete(entityId);
+  }
+
+  /**
    * Start a translation for the given paper entity.
    * Runs pdf2zh as a CLI subprocess and awaits completion.
    */
