@@ -99,7 +99,7 @@ export class UIManager {
         const stage = data?.stage ?? "";
         return `<div style="display:flex;align-items:center;gap:8px;">
           <span style="${baseStyle}color:#3b82f6;">
-            \u23F3 Translating... ${percent}%${stage ? ` (${stage})` : ""}
+            \u23F3 Translating... ${percent}%${stage ? ` · ${stage}` : ""}
           </span>
           <div style="flex:1;max-width:100px;height:3px;background:#e5e7eb;border-radius:2px;">
             <div style="height:100%;width:${percent}%;background:#3b82f6;border-radius:2px;"></div>
