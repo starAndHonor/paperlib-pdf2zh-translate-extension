@@ -1,6 +1,6 @@
 {
   "name": "paperlib-pdf2zh-translate-extension",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "main": "dist/main.js",
   "type": "commonjs",
   "manifest_version": "1.0.0",
