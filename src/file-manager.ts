@@ -1,4 +1,5 @@
 import { PLAPI } from "paperlib-api/api";
+import fs from "fs";
 
 /**
  * Controls which version opens by default after translation.
@@ -66,8 +67,8 @@ export class FileManager {
     langOut: string,
     defaultOpen: DefaultOpenMode
   ): Promise<void> {
-    // Clean up old pdf2zh translations
-    this.cleanupOldTranslationURLs(entity);
+    // Clean up old pdf2zh translations and stale supURLs
+    await this.cleanupOldTranslationURLs(entity);
 
     // New Entity model path: supplementaries dict exists
     if (entity.supplementaries && typeof entity.supplementaries === "object" && !Array.isArray(entity.supplementaries)) {
@@ -112,11 +113,26 @@ export class FileManager {
   private attachViaSupURLs(entity: any, files: { mono?: string; dual?: string }): void {
     const supURLs: string[] = entity.supURLs ? [...entity.supURLs] : [];
 
-    if (files.dual) {
-      supURLs.push(`file://${files.dual}`);
-    }
-    if (files.mono) {
-      supURLs.push(`file://${files.mono}`);
+    // Verify files exist before adding to supURLs
+    for (const [key, filePath] of Object.entries(files)) {
+      if (!filePath) continue;
+      const exists = fs.existsSync(filePath);
+      PLAPI.logService.info(
+        "[pdf2zh] File check",
+        `${key}=${filePath}, exists=${exists}`,
+        true,
+        "pdf2zh"
+      );
+      if (!exists) {
+        PLAPI.logService.error(
+          "[pdf2zh] Source file missing",
+          `${key}=${filePath}`,
+          true,
+          "pdf2zh"
+        );
+        continue;
+      }
+      supURLs.push(`file://${filePath}`);
     }
 
     entity.supURLs = supURLs;
@@ -165,18 +181,47 @@ export class FileManager {
   }
 
   /**
-   * Remove previous pdf2zh translation URLs from supURLs.
-   * For the old model, identifies stale entries by the temp dir marker.
+   * Remove stale supURLs entries and old pdf2zh translation URLs.
+   * For the old model: validates each entry via fileService.access()
+   * and removes entries whose files no longer exist.
    */
-  private cleanupOldTranslationURLs(entity: any): void {
-    if (!entity.supURLs || !Array.isArray(entity.supURLs)) {
+  private async cleanupOldTranslationURLs(entity: any): Promise<void> {
+    if (!entity.supURLs || !Array.isArray(entity.supURLs) || entity.supURLs.length === 0) {
       return;
     }
 
-    // Remove supURLs entries that originated from our temp dir
-    entity.supURLs = entity.supURLs.filter(
-      (url: string) => !url.includes(PDF2ZH_TEMP_MARKER)
-    );
+    const validURLs: string[] = [];
+    for (const url of entity.supURLs) {
+      // Remove entries from our temp dir (in-progress or failed translations)
+      if (url.includes(PDF2ZH_TEMP_MARKER)) {
+        continue;
+      }
+
+      // Verify file is accessible via Paperlib's file service
+      try {
+        const accessed = await PLAPI.fileService.access(url, true);
+        if (accessed) {
+          validURLs.push(url);
+        } else {
+          PLAPI.logService.info(
+            "[pdf2zh] Removing stale supURL",
+            url,
+            false,
+            "pdf2zh"
+          );
+        }
+      } catch {
+        // File not found or inaccessible — remove it
+        PLAPI.logService.info(
+          "[pdf2zh] Removing inaccessible supURL",
+          url,
+          false,
+          "pdf2zh"
+        );
+      }
+    }
+
+    entity.supURLs = validURLs;
 
     // Also remove supplementaries dict entries with pdf2zh prefix (new model)
     if (entity.supplementaries && typeof entity.supplementaries === "object" && !Array.isArray(entity.supplementaries)) {
